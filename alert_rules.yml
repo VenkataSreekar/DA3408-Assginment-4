@@ -1,0 +1,44 @@
+# AI attribution (Code of Conduct): PromQL below was drafted with Claude.
+# Prompt used: "Write Prometheus alert rules for a Streamlit BLIP captioning app exposing
+#  caption_* metrics (histogram caption_inference_seconds, counter caption_images_processed_total{status})
+#  plus node_exporter: app down, p95 latency, error ratio, high CPU, high memory."
+# >>> Replace the prompt above with the exact wording YOU used. <<<
+groups:
+  - name: caption-app
+    rules:
+      - alert: CaptionAppDown
+        expr: up{job="caption-app"} == 0          # target unreachable
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Captioning app /metrics is unreachable"}
+
+      - alert: HighInferenceP95
+        # p95 of per-image inference over 2m: histogram_quantile on summed bucket rates
+        expr: histogram_quantile(0.95, sum by (le) (rate(caption_inference_seconds_bucket[2m]))) > 8
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "p95 inference > 8s"}
+
+      - alert: HighErrorRatio
+        # failed images / all images, 5m window; clamp_min avoids divide-by-zero when idle
+        expr: >
+          sum(rate(caption_images_processed_total{status="error"}[5m]))
+          / clamp_min(sum(rate(caption_images_processed_total[5m])), 1e-9) > 0.1
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "More than 10% of images failing"}
+
+  - name: host
+    rules:
+      - alert: HostHighCPU
+        # 100 - idle% averaged across cores
+        expr: 100 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100 > 90
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Host CPU > 90%"}
+
+      - alert: HostHighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Host memory > 90%"}

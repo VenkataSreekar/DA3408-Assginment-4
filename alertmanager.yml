@@ -1,0 +1,12 @@
+# Minimal pipeline: Prometheus -> Alertmanager -> webhook.
+# Create a free URL at https://webhook.site and paste it below to see alerts arrive.
+route:
+  receiver: default
+  group_by: [alertname]
+  group_wait: 5s
+  group_interval: 30s
+  repeat_interval: 10m
+receivers:
+  - name: default
+    webhook_configs:
+      - url: "https://webhook.site/REPLACE-ME"
